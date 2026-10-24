@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cronologie Matriceală - Politică & Economie</title>
+    
+    <!-- Setări PWA -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#059669">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3652/3652191.png">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SheetJS pentru citirea fișierelor Excel (.xlsx) -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body class="bg-slate-100 p-6 min-h-screen font-sans">
+
+    <div class="max-w-[95%] mx-auto bg-white rounded-2xl shadow-xl p-8">
+        
+        <!-- Header -->
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 border-b pb-4 gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-800">Cronologie Matriceală pe Categorii</h1>
+                <p id="status-text" class="text-sm text-slate-500 mt-1">
+                    Data de <span id="azi-date-label" class="font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">ASTĂZI (23 Octombrie 2026)</span> este marcată cu verde. <span class="italic text-slate-400 ml-2">(Click pe un eveniment pentru detalii)</span>
+                </p>
+            </div>
+            
+            <!-- Buton încărcare fișier Excel -->
+            <div class="flex items-center gap-3">
+                <input type="file" id="excel-file-input" accept=".xlsx, .xls, .csv" class="hidden" onchange="handleFileUpload(event)">
+                <button onclick="document.getElementById('excel-file-input').click()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm px-4 py-2.5 rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer">
+                    📁 Încarcă fișier Excel actualizat
+                </button>
+            </div>
+        </div>
+
+        <!-- Matricea Cronologiei -->
+        <div id="timeline-matrix" class="overflow-x-auto relative pb-6 min-h-[300px]">
+            <!-- Aici va fi injectată cronologia dinamic -->
+        </div>
+
+    </div>
+
+    <!-- Modal pentru detalii eveniment la click -->
+    <div id="event-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs hidden items-center justify-center z-50">
+        <div class="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full mx-4 border border-slate-100">
+            <div class="flex justify-between items-start mb-4">
+                <span id="modal-cat" class="text-xs font-black uppercase tracking-wider bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md"></span>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg px-2">✕</button>
+            </div>
+            <h3 id="modal-title" class="text-lg font-black text-slate-900 mb-3"></h3>
+            <div class="space-y-2 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
+                <p class="flex justify-between"><strong class="text-slate-500">Persoana implicată:</strong> <span id="modal-persoana" class="font-bold text-slate-800"></span></p>
+                <p class="flex justify-between"><strong class="text-slate-500">Data evenimentului:</strong> <span id="modal-data" class="font-bold text-slate-800"></span></p>
+                <p class="flex justify-between"><strong class="text-slate-500">Diferența față de azi:</strong> <span id="modal-diff" class="font-bold"></span></p>
+                <p class="flex justify-between"><strong class="text-slate-500">Importanță:</strong> <span id="modal-imp" class="font-bold text-slate-800"></span></p>
+            </div>
+            <button onclick="closeModal()" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-semibold py-2 rounded-xl text-xs transition-all">Închide</button>
+        </div>
+    </div>
+
+    <script>
+        // Date actualizate
+        let currentAzi = "2026-10-23";
+        let evenimente = [
+            { categorie: "USA", eveniment: "Alegeri USA", persoana: "Trump", data: "2026-11-03", importanta: 9 },
+            { categorie: "Global", eveniment: "Petrol 222", persoana: "-", data: "2026-10-23", importanta: 8 },
+            { categorie: "Romania", eveniment: "Alegeri guvern Romania", persoana: "Guvern", data: "2026-10-20", importanta: 8 },
+            { categorie: "Romania", eveniment: "Curs EURO 333", persoana: "-", data: "2026-10-13", importanta: 5 },
+            { categorie: "USA", eveniment: "Alegeri USA", persoana: "Trump", data: "2027-02-01", importanta: 9 },
+            { categorie: "Global", eveniment: "Petrol si energie", persoana: "-", data: "2026-12-31", importanta: 8 },
+            { categorie: "Romania", eveniment: "Guvern ales in RO", persoana: "Guvern", data: "2026-10-20", importanta: 5 },
+            { categorie: "Romania", eveniment: "Curs EURO RON", persoana: "-", data: "2027-04-01", importanta: 1 },
+            { categorie: "Bulgaria", eveniment: "Alegerile prezidențiale", persoana: "-", data: "2026-10-25", importanta: 8 },
+            { categorie: "Israel", eveniment: "Alegerile legislative", persoana: "-", data: "2026-10-27", importanta: 8 },
+            { categorie: "USA", eveniment: "Alegerile midterm", persoana: "-", data: "2026-11-03", importanta: 9 },
+            { categorie: "Global", eveniment: "Conferința COP31", persoana: "-", data: "2026-11-09", importanta: 7 }
+        ];
+
+        function renderTimeline() {
+            const container = document.getElementById("timeline-matrix");
+            container.innerHTML = "";
+
+            if (!evenimente.length) {
+                container.innerHTML = `<p class="text-center text-slate-400 py-10 text-xs">Nu există evenimente de afișat.</p>`;
+                return;
+            }
+
+            let aziTime = new Date(currentAzi).setHours(0,0,0,0);
+
+            let sorted = evenimente.map((e, index) => {
+                let evTime = new Date(e.data).setHours(0,0,0,0);
+                let diffTime = evTime - aziTime;
+                let diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+                return { ...e, evTime, diffDays, originalIndex: index };
+            }).sort((a, b) => a.evTime - b.evTime);
+
+            let dates = sorted.map(e => e.evTime);
+            dates.push(aziTime);
+
+            let minTime = Math.min(...dates);
+            let maxTime = Math.max(...dates);
+            let spanTime = maxTime - minTime || 1;
+
+            let categorii = [...new Set(sorted.map(e => e.categorie))];
+
+            let html = `<div class="relative min-w-[950px] pt-8">`;
+
+            let aziPercent = ((aziTime - minTime) / spanTime) * 90 + 5; 
+            html += `
+                <div class="absolute top-0 bottom-0 z-5 flex flex-col items-center pointer-events-none" style="left: ${aziPercent}%;">
+                    <span class="bg-emerald-600 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow mb-1 whitespace-nowrap z-10">ASTĂZI (${currentAzi})</span>
+                    <div class="w-1 bg-emerald-500 h-full rounded shadow-xs"></div>
+                </div>
+            `;
+
+            html += `<div class="relative border-b-2 border-slate-200 my-6 mx-4"></div>`;
+
+            categorii.forEach(cat => {
+                let evCat = sorted.filter(e => e.categorie === cat);
+                html += `
+                    <div class="mb-6 bg-slate-50/80 p-3 rounded-xl border border-slate-200">
+                        <h3 class="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-3 bg-slate-200/70 inline-block px-2 py-0.5 rounded">${cat}</h3>
+                        <div class="relative h-16">
+                `;
+
+                evCat.forEach(ev => {
+                    let leftPct = ((ev.evTime - minTime) / spanTime) * 90 + 5;
+                    let isPast = ev.evTime < aziTime;
+                    let isToday = ev.evTime === aziTime;
+
+                    let positionClass = "";
+                    let zIndexClass = "z-10 hover:z-40";
+                    let containerBorder = "border-slate-200 hover:border-blue-400";
+                    let cardBg = "bg-white";
+
+                    if (isToday) {
+                        positionClass = "-translate-x-1/2";
+                        zIndexClass = "z-30";
+                        containerBorder = "border-emerald-500 ring-2 ring-emerald-200";
+                        cardBg = "bg-white";
+                    } else if (isPast) {
+                        positionClass = "-translate-x-full -mr-3";
+                    } else {
+                        positionClass = "translate-x-0 ml-3";
+                    }
+
+                    let diffText = "";
+                    let diffBadgeClass = "";
+                    if (isToday) {
+                        diffText = "Astăzi";
+                        diffBadgeClass = "bg-emerald-600 text-white font-bold";
+                    } else if (isPast) {
+                        diffText = `${Math.abs(ev.diffDays)}d în urmă`;
+                        diffBadgeClass = "bg-slate-100 text-slate-600 border-slate-200";
+                    } else {
+                        diffText = `în ${ev.diffDays}d`;
+                        diffBadgeClass = "bg-blue-100 text-blue-800 border-blue-300 font-bold";
+                    }
+
+                    let pointBg = isToday ? 'bg-emerald-600' : (isPast ? 'bg-slate-400' : 'bg-blue-600');
+                    let evJson = encodeURIComponent(JSON.stringify(ev));
+
+                    html += `
+                        <div class="absolute transform ${positionClass} ${zIndexClass} cursor-pointer" style="left: ${leftPct}%;" onclick="openModal('${evJson}')">
+                            <div class="${cardBg} hover:bg-slate-50 border ${containerBorder} rounded-lg p-1.5 shadow-md transition-all flex flex-col items-center min-w-[125px] max-w-[155px]">
+                                <div class="flex items-center gap-1.5 mb-1">
+                                    <span class="w-2.5 h-2.5 rounded-full ${pointBg} shrink-0"></span>
+                                    <span class="text-[10px] font-bold text-slate-600">${ev.data}</span>
+                                </div>
+                                <p class="text-[11px] font-bold text-slate-800 text-center leading-tight mb-1 truncate w-full" title="${ev.eveniment}">${ev.eveniment}</p>
+                                <span class="text-[9px] px-1.5 py-0.5 rounded border ${diffBadgeClass} whitespace-nowrap">${diffText}</span>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                html += `</div></div>`;
+            });
+
+            html += `</div>`;
+            container.innerHTML = html;
+            document.getElementById("azi-date-label").innerText = `ASTĂZI (${currentAzi})`;
+        }
+
+        function openModal(evEncoded) {
+            let ev = JSON.parse(decodeURIComponent(evEncoded));
+            
+            document.getElementById("modal-cat").innerText = ev.categorie;
+            document.getElementById("modal-title").innerText = ev.eveniment;
+            document.getElementById("modal-persoana").innerText = (ev.persoana && ev.persoana !== '-') ? ev.persoana : 'Nespecificată';
+            document.getElementById("modal-data").innerText = ev.data;
+            document.getElementById("modal-imp").innerText = ev.importanta + " / 10";
+
+            let diffEl = document.getElementById("modal-diff");
+            if (ev.diffDays === 0) {
+                diffEl.innerText = "Astăzi";
+                diffEl.className = "font-bold text-emerald-600";
+            } else if (ev.diffDays < 0) {
+                diffEl.innerText = `${Math.abs(ev.diffDays)} zile în urmă`;
+                diffEl.className = "font-bold text-slate-600";
+            } else {
+                diffEl.innerText = `În ${ev.diffDays} zile`;
+                diffEl.className = "font-bold text-blue-600";
+            }
+
+            document.getElementById("event-modal").classList.remove("hidden");
+            document.getElementById("event-modal").classList.add("flex");
+        }
+
+        function closeModal() {
+            document.getElementById("event-modal").classList.remove("flex");
+            document.getElementById("event-modal").classList.add("hidden");
+        }
+
+        function handleFileUpload(e) {
+            let file = e.target.files[0];
+            if (!file) return;
+
+            let reader = new FileReader();
+            reader.onload = function(e) {
+                let data = new Uint8Array(e.target.result);
+                let workbook = XLSX.read(data, {type: 'array'});
+                let firstSheetName = workbook.SheetNames[0];
+                let worksheet = workbook.Sheets[firstSheetName];
+                
+                let json = XLSX.utils.sheet_to_json(worksheet, {header: 1});
+                
+                if (json[0] && json[0][0]) {
+                    let valA1 = json[0][0];
+                    if (typeof valA1 === 'number') {
+                        let dateObj = XLSX.SSF.parse_date_code(valA1);
+                        currentAzi = `${dateObj.y}-${String(dateObj.m).padStart(2, '0')}-${String(dateObj.d).padStart(2, '0')}`;
+                    } else {
+                        currentAzi = String(valA1).substring(0, 10);
+                    }
+                }
+
+                let newEvenimente = [];
+                for (let i = 1; i < json.length; i++) {
+                    let row = json[i];
+                    if (row[1] && row[2] && row[4]) {
+                        let dataStr = row[4];
+                        if (typeof dataStr === 'number') {
+                            let dObj = XLSX.SSF.parse_date_code(dataStr);
+                            dataStr = `${dObj.y}-${String(dObj.m).padStart(2, '0')}-${String(dObj.d).padStart(2, '0')}`;
+                        } else {
+                            dataStr = String(dataStr).substring(0, 10);
+                        }
+
+                        newEvenimente.push({
+                            categorie: row[1],
+                            eveniment: row[2],
+                            persoana: row[3] || '-',
+                            data: dataStr,
+                            importanta: Number(row[5]) || 5
+                        });
+                    }
+                }
+
+                if (newEvenimente.length > 0) {
+                    evenimente = newEvenimente;
+                    renderTimeline();
+                    alert("Fișierul Excel a fost încărcat și cronologia a fost actualizată cu succes!");
+                } else {
+                    alert("Nu s-au găsit date valide în fișierul Excel conform structurii așteptate.");
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        window.onload = renderTimeline;
+
+        // Înregistrare Service Worker pentru PWA
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js')
+                .then(() => console.log("Service Worker Înregistrat cu succes!"))
+                .catch(err => console.log("Eroare la înregistrarea SW:", err));
+        }
+    </script>
+</body>
+</html>
