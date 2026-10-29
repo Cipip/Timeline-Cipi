@@ -154,19 +154,15 @@
             categorii.forEach(cat => {
                 let evCat = sorted.filter(e => e.categorie === cat);
 
-                // Calculare poziții procentuale și grupare/decalaj pentru suprapuneri
                 let positionedEvents = [];
                 evCat.forEach(ev => {
                     let leftPct = ((ev.evTime - minTime) / spanTime) * 90 + 5;
-                    
-                    // Verificăm dacă există deja un eveniment poziționat foarte aproape pe axa X (sub 3.5%)
                     let overlappingGroup = positionedEvents.filter(p => Math.abs(p.leftPct - leftPct) < 3.5);
-                    let verticalLevel = overlappingGroup.length; // 0 = centru/principal, 1 = sus, 2 = jos, etc.
+                    let verticalLevel = overlappingGroup.length;
 
                     positionedEvents.push({ ...ev, leftPct, verticalLevel });
                 });
 
-                // Înălțime dinamică a rândului de categorie în funcție de nivelul maxim de suprapunere
                 let maxLevel = Math.max(...positionedEvents.map(p => p.verticalLevel), 0);
                 let rowHeightClass = maxLevel > 0 ? "h-28" : "h-16";
 
@@ -195,19 +191,6 @@
                         positionClass = "translate-x-0 ml-3";
                     }
 
-                    // Decalaj pe verticală (top offset) bazat pe level-ul de suprapunere
-                    let verticalStyle = "";
-                    if (ev.verticalLevel === 0) {
-                        verticalStyle = "top-0";
-                    } else if (ev.verticalLevel % 2 === 1) {
-                        let offset = Math.ceil(ev.verticalLevel / 2) * 26;
-                        verticalStyle = `-top-[${offset}px]`;
-                    } else {
-                        let offset = (ev.verticalLevel / 2) * 26;
-                        verticalStyle = `top-[${offset}px]`;
-                    }
-
-                    // Fallback stil inline sigur pentru Tailwind JIT
                     let inlineTopStyle = "";
                     if (ev.verticalLevel === 1) inlineTopStyle = "top: -28px;";
                     else if (ev.verticalLevel === 2) inlineTopStyle = "top: 28px;";
@@ -321,10 +304,7 @@
                     
                     let json = XLSX.utils.sheet_to_json(worksheet, {header: 1});
                     
-                    if (json.length === 0) {
-                        alert("Fișierul Excel este gol.");
-                        return;
-                    }
+                    if (json.length === 0) return;
 
                     if (json[0] && json[0][0]) {
                         let valA1 = json[0][0];
@@ -387,13 +367,9 @@
                     if (newEvenimente.length > 0) {
                         evenimente = newEvenimente;
                         renderTimeline();
-                        alert(`Fișierul Excel a fost încărcat cu succes! S-au preluat ${evenimente.length} evenimente.`);
-                    } else {
-                        alert("Nu s-au găsit rânduri cu evenimente și date valide în fișierul Excel.");
                     }
                 } catch (err) {
                     console.error(err);
-                    alert("Eroare la citirea fișierului Excel.");
                 }
             };
             reader.readAsArrayBuffer(file);
